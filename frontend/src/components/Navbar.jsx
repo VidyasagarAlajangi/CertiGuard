@@ -57,7 +57,7 @@ const Navbar = () => {
           <User size={22} />
           <span className="hidden sm:inline">{user?.name}</span>
         </button>
-        <div className="absolute right-0 mt-2 w-48 bg-[#1f1f1f] border border-[#333] rounded-lg shadow-lg py-1 z-20 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all pointer-events-none group-hover:pointer-events-auto origin-top-right">
+        <div className="absolute right-0 mt-2 w-48 bg-[#1f1f1f] border border-[#333] rounded-lg shadow-lg py-1 z-20 opacity-0 scale-95 group-hover:opacity-100 group-hover:scale-100 transition-all pointer-events-auto origin-top-right">
           <div className="px-3 py-2 text-xs text-gray-400 border-b border-[#333]">
             Signed in as <strong>{user?.name}</strong>
           </div>

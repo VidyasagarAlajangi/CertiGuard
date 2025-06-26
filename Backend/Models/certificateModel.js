@@ -13,6 +13,11 @@ const CertificateSchema = new mongoose.Schema(
       required: true,
     },
 
+    recipientEmail: {
+      type: String,
+      required: true,
+    },
+
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -58,6 +63,9 @@ const CertificateSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+
+    s3Url: String,
+    hash: String,
   },
   { timestamps: true }
 );

@@ -1,25 +1,25 @@
 import { useState } from "react";
 import api from "../lib/axios";
-import { Search, Loader, XCircle } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Search, Loader, XCircle, CheckCircle } from "lucide-react";
 
 const VerifyById = () => {
   const [certId, setCertId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const navigate = useNavigate();
+  const [result, setResult] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setResult(null);
 
     try {
-      const res = await api.get(`/verify/${certId}`);
-      if (res.data && res.data.success && res.data.certificate?.certId) {
-        navigate(`/certificate/${res.data.certificate.certId}`);
+      const res = await api.get(`/certificates/public/verify/${certId}`);
+      if (res.data && res.data.valid) {
+      setResult(res.data);
       } else {
-        setError("Certificate not found or not valid.");
+        setError(res.data?.message || "Certificate not found or not valid.");
       }
     } catch (err) {
       setError(
@@ -67,6 +67,25 @@ const VerifyById = () => {
         <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-3">
           <XCircle />
           <span className="font-medium">{error}</span>
+        </div>
+      )}
+
+      {result && (
+        <div className={`mt-6 p-4 rounded-lg flex flex-col gap-2 ${result.valid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            {result.valid ? <CheckCircle /> : <XCircle />}
+            <span className="font-bold text-lg">
+              {result.valid ? 'Certificate is valid.' : 'Certificate is invalid or has been tampered with.'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div><span className="font-semibold">Recipient:</span> {result.cert.recipientName}</div>
+            <div><span className="font-semibold">Course:</span> {result.cert.courseName}</div>
+            <div><span className="font-semibold">Issued Date:</span> {result.cert.issuedDate ? new Date(result.cert.issuedDate).toLocaleDateString() : 'N/A'}</div>
+            <div><span className="font-semibold">Company:</span> {result.cert.companyName}</div>
+            <div className="col-span-2"><span className="font-semibold">Certificate ID:</span> {result.cert.certId}</div>
+           
+          </div>
         </div>
       )}
     </div>

@@ -2,8 +2,10 @@ import Certificate from "../Models/certificateModel.js";
 import User from "../Models/userModel.js";
 import csvParser from "csv-parser";
 import fs from "fs";
+import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import generateCertificate from "../utils/generateCertificate.js";
+import { processCertificate } from "../utils/generateCertificate.js";
 
 // Issue a single certificate
 export const issueSingleCertificate = async (req, res) => {
@@ -17,45 +19,47 @@ export const issueSingleCertificate = async (req, res) => {
       });
     }
 
-    // Check if recipient exists or create new user
+    // Check if recipient exists; do NOT create a new user if not found
     let recipient = await User.findOne({ email: recipientEmail });
-    if (!recipient) {
-      recipient = await User.create({
-        name: recipientName,
-        email: recipientEmail,
-        role: "user",
-        password: uuidv4(), // Generate random password
-      });
-    }
+    let userId = recipient ? recipient._id : null;
 
     const certId = uuidv4();
-    const templatePath = "templates/Template_1.pdf";
+    const templatePath = "templates/Template_4.pdf";
     const saveDir = "certificates/";
 
-    // Generate certificate PDF
-    const { fileName } = await generateCertificate(
+    // Fetch company name for template
+    const companyName = req.user.name || (req.user.companyName) || "";
+    const { fileName, qrDataUrl, qrText } = await generateCertificate(
       templatePath,
       {
+        certId,
         name: recipientName,
         email: recipientEmail,
         courseName,
         issuedDate: new Date().toISOString().split("T")[0],
+        companyName,
       },
       saveDir
     );
+
+    const localPdfPath = path.join(saveDir, fileName);
+    const { s3Url, hash } = await processCertificate(localPdfPath, certId, userId);
 
     // Create certificate record
     const certificate = new Certificate({
       certId,
       recipientName,
-      userId: recipient._id,
+      recipientEmail,
+      userId, // <-- only set if user exists
       companyId: req.user.id,
       courseName,
       courseDuration: courseDuration || "",
       remarks: remarks || "Successfully Completed",
       issuedDate: new Date(),
       status: "approved",
-      pdfUrl: `/certificates/${fileName}`,
+      s3Url,
+      hash,
+      qrCodeUrl: qrText,
     });
 
     await certificate.save();
@@ -67,10 +71,15 @@ export const issueSingleCertificate = async (req, res) => {
     });
   } catch (error) {
     console.error("Certificate issuance error:", error);
+    if (error.stack) {
+      console.error("Stack trace:", error.stack);
+    }
     res.status(500).json({
       success: false,
       message: "Failed to issue certificate.",
       error: error.message,
+      stack: error.stack,
+      fullError: error
     });
   }
 };
@@ -95,7 +104,7 @@ export const issueBulkCertificates = async (req, res) => {
     }
 
     const recipients = [];
-    const templatePath = "templates/Template_1.pdf";
+    const templatePath = "templates/Template_4.pdf";
     const saveDir = "certificates/";
     const certificates = [];
 
@@ -113,43 +122,44 @@ export const issueBulkCertificates = async (req, res) => {
     // Process each recipient
     for (const recipient of recipients) {
       try {
-        // Check if recipient exists or create new user
+        // Check if recipient exists; do NOT create a new user if not found
         let user = await User.findOne({ email: recipient.email });
-        if (!user) {
-          user = await User.create({
-            name: recipient.name,
-            email: recipient.email,
-            role: "user",
-            password: uuidv4(), // Generate random password
-          });
-        }
+        let userId = user ? user._id : null;
 
         const certId = uuidv4();
-        
+        // Fetch company name for template
+        const companyName = req.user.name || (req.user.companyName) || "";
         // Generate certificate PDF
-        const { fileName } = await generateCertificate(
+        const { fileName, qrDataUrl, qrText } = await generateCertificate(
           templatePath,
           {
+            certId,
             name: recipient.name,
             email: recipient.email,
             courseName,
             issuedDate: new Date().toISOString().split("T")[0],
+            companyName,
           },
           saveDir
         );
+        const localPdfPath = path.join(saveDir, fileName);
+        const { s3Url, hash } = await processCertificate(localPdfPath, certId, userId);
 
         // Create certificate record
         const certificate = new Certificate({
           certId,
           recipientName: recipient.name,
-          userId: user._id,
+          recipientEmail: recipient.email,
+          userId, // <-- only set if user exists
           companyId: req.user.id,
           courseName,
           courseDuration: courseDuration || "",
           remarks: remarks || "Successfully Completed",
           issuedDate: new Date(),
           status: "approved",
-          pdfUrl: `/certificates/${fileName}`,
+          s3Url,
+          hash,
+          qrCodeUrl: qrText,
         });
 
         await certificate.save();

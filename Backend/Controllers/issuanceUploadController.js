@@ -99,7 +99,7 @@ export const approveCertificateIssuance = async (req, res) => {
         const generated = [];
 
         for (const recipient of recipients) {
-          const { certId, fileName } = await generateCertificate(
+          const { certId: newCertId, fileName: newFileName, qrDataUrl, qrText } = await generateCertificate(
             templatePath,
             {
               name: recipient.name,
@@ -111,14 +111,15 @@ export const approveCertificateIssuance = async (req, res) => {
           );
 
           const cert = new Certificate({
-            certId,
+            certId: newCertId,
             recipientName: recipient.name,
             companyId: request.companyId || null,
             userId: request.uploadedBy._id,
             courseName: request.courseName,
             issuedDate: request.issuedDate,
-            pdfUrl: `/certificates/${fileName}`,
+            pdfUrl: `/certificates/${newFileName}`,
             status: "approved",
+            qrCodeUrl: qrText,
           });
 
           await cert.save();

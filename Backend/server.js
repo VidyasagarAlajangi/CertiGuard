@@ -29,7 +29,7 @@ app.use("/uploads", express.static("uploads"));
 
 // API Endpoints
 app.use("/api", userRouter);  // This will handle /api/login and /api/signup
-app.use("/api", certRouter);  // This will handle /api/certificates/*
+app.use("/api/certificates", certRouter);  // This will handle /api/certificates/*
 app.use("/api", companyRouter);  // This will handle /api/companies/*
 app.use("/api/company", companyCertRouter);  // This will handle /api/company/certificates/*
 

@@ -12,7 +12,7 @@ function PendingCertificates() {
     setError("");
     try {
       const token = localStorage.getItem("token");
-      const res = await api.get("/admin/certificates", {
+      const res = await api.get("/certificates/admin/certificates", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setCerts((res.data.certificates || []).filter(c => c.status === "pending"));
@@ -32,8 +32,8 @@ function PendingCertificates() {
     try {
       const token = localStorage.getItem("token");
       const url = action === "approve"
-        ? `/admin/certificates/approve/${id}`
-        : `/admin/certificates/reject/${id}`;
+        ? `/certificates/admin/certificates/approve/${id}`
+        : `/certificates/admin/certificates/reject/${id}`;
       await api.post(url, {}, { headers: { Authorization: `Bearer ${token}` } });
       await fetchPending();
     } catch (err) {

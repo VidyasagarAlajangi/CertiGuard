@@ -1,109 +1,171 @@
-// import fs from "fs";
-// import path from "path";
-// import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-// import { v4 as uuidv4 } from "uuid";
+// 📂 utils/generateCertificate.js
 
-// const generateCertificate = async (templatePath, recipient, saveDir) => {
-//   const { name, email, courseName, issuedDate } = recipient;
-
-//   const pdfBytes = fs.readFileSync(templatePath);
-//   const pdfDoc = await PDFDocument.load(pdfBytes);
-//   const page = pdfDoc.getPage(0);
-
-//   const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-//   const fontSize = 24;
-
-//   page.drawText(name, {
-//     x: 280,
-//     y: 300,
-//     size: fontSize,
-//     font,
-//     color: rgb(0, 0, 0),
-//   });
-
-//   page.drawText(courseName, {
-//     x: 280,
-//     y: 270,
-//     size: 24,
-//     font,
-//     color: rgb(0.2, 0.2, 0.2),
-//   });
-
-//   page.drawText(issuedDate, {
-//     x: 280,
-//     y: 240,
-//     size: 16,
-//     font,
-//     color: rgb(0.2, 0.2, 0.2),
-//   });
-//   const certId = uuidv4();
-//   const fileName = `${certId}.pdf`;
-//   const filePath = path.join(saveDir, fileName);
-//   fs.writeFileSync(filePath, await pdfDoc.save());
-
-//   return { certId, fileName };
-// };
-// export default generateCertificate;
-
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import fs from "fs";
 import path from "path";
-import PDFDocument from "pdfkit";
-import { v4 as uuidv4 } from "uuid";
+import { convertCmToPdfCoords } from "./pdfCoordinates.js";
+import uploadFileToS3 from './uploadToS3.js';
+import crypto from 'crypto';
+import QRCode from "qrcode";
 
-/**
- * Generate a certificate using PDFKit and dynamic recipient data.
- * @param {string} backgroundPath - Path to the certificate background image.
- * @param {object} recipient - Recipient object with name, courseName, issuedDate, email.
- * @param {string} saveDir - Output directory to save the generated certificate.
- * @returns {object} certId and fileName
- */
-const generateCertificate = async (backgroundPath, recipient, saveDir) => {
-  const { name, email, courseName, issuedDate } = recipient;
+const generateCertificate = async (templatePath, recipient, saveDir) => {
+  console.log('generateCertificate recipient:', recipient);
+  const {
+    certId,
+    name,
+    email,
+    courseName,
+    courseDuration,
+    courseProvider,
+    issuedDate,
+    hash,
+    companyName,
+  } = recipient;
 
-  const doc = new PDFDocument({
-    size: "A4",
-    layout: "landscape",
-  });
+  const existingPdfBytes = fs.readFileSync(templatePath);
+  const pdfDoc = await PDFDocument.load(existingPdfBytes);
+  const pages = pdfDoc.getPages();
+  const page = pages[0];
 
-  const certId = uuidv4();
-  const fileName = `${certId}.pdf`;
-  const filePath = path.join(saveDir, fileName);
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const helveticaOblique = await pdfDoc.embedFont(
+    StandardFonts.HelveticaOblique
+  );
 
-  // Pipe PDF to file
-  doc.pipe(fs.createWriteStream(filePath));
+  const { height: pageHeight } = page.getSize();
 
-  // Draw background image
-  if (backgroundPath) {
-    doc.image(backgroundPath, 0, 0, {
-      width: doc.page.width,
-      height: doc.page.height,
-    });
+  // 🔹 Draw centered text inside a box
+  const drawCenteredInBox = (
+    text,
+    cmStartX,
+    boxWidthCm,
+    cmY,
+    size,
+    font,
+    color
+  ) => {
+    const { x: boxX, y } = convertCmToPdfCoords(cmStartX, cmY, pageHeight);
+    const boxWidth = boxWidthCm * 28.35; // cm to pt
+    const textWidth = font.widthOfTextAtSize(text, size);
+    const x = boxX + (boxWidth - textWidth) / 2;
+
+    page.drawText(text, { x, y, size, font, color });
+  };
+
+  // 🔹 Draw normal (left-aligned) text
+  const drawNormalText = (text, cmX, cmY, size, font, color) => {
+    const { x, y } = convertCmToPdfCoords(cmX, cmY, pageHeight);
+    page.drawText(text, { x, y, size, font, color });
+  };
+
+  // 🖋 Draw certificate fields
+  drawCenteredInBox(
+    String(name ?? "N/A"),
+    7.64,
+    14.29,
+    7.8,
+    26,
+    helveticaBold,
+    rgb(0.1, 0.1, 0.1)
+  );
+  drawCenteredInBox(
+    String(courseName ?? "N/A"),
+    7.64,
+    14.29,
+    9.99,
+    21,
+    helvetica,
+    rgb(0.15, 0.15, 0.15)
+  );
+
+  if (companyName) {
+    drawCenteredInBox(
+      String(companyName),
+      7.64,
+      14.29,
+      11.2, // slightly below course name
+      16,
+      helveticaOblique,
+      rgb(0.2, 0.2, 0.2)
+    );
   }
 
-  // Set font (optional: use your own TTF)
-  doc.font("Helvetica-Bold");
+  if (courseProvider) {
+    drawCenteredInBox(
+      String(courseProvider ?? ""),
+      19.58,
+      9.21,
+      18.73,
+      14,
+      helveticaOblique,
+      rgb(0.2, 0.2, 0.2)
+    );
+  }
 
-  // === Draw Recipient Fields Centered ===
+  // if (courseDuration) {
+  //   drawCenteredInBox(
+  //     courseDuration,
+  //     10,
+  //     4.5,
+  //     12.4,
+  //     14,
+  //     helvetica,
+  //     rgb(0.25, 0.25, 0.25)
+  //   );
+  // }
 
-  // Name
-  doc.fontSize(30);
-  const nameWidth = doc.widthOfString(name);
-  doc.text(name, (doc.page.width - nameWidth) / 2, 250);
+  drawNormalText(String(issuedDate ?? "N/A"), 1.29, 18.42, 14, helvetica, rgb(0.5, 0.5, 0.5));
+  drawNormalText(
+    String(certId ?? "N/A").slice(0, 32),
+    19.68,
+    2.2,
+    14,
+    helvetica,
+    rgb(0.6, 0.6, 0.6)
+  );
+  drawCenteredInBox(String(hash ?? ""), 5.97, 17.78, 19.8, 12, helvetica, rgb(0.6, 0.6, 0.6));
 
-  // Course Name
-  doc.fontSize(22);
-  const courseWidth = doc.widthOfString(courseName);
-  doc.text(courseName, (doc.page.width - courseWidth) / 2, 300);
+  // Generate QR code with certId for verification
+  const qrText = `${process.env.FRONTEND_URL || "https://certiguard.com"}/verify/${certId}`;
+  console.log('[QR] Generating QR code for:', qrText);
+  const qrDataUrl = await QRCode.toDataURL(qrText);
+  const qrImage = await pdfDoc.embedPng(qrDataUrl);
+  // Place QR at bottom left (customize as needed)
+  const { x: qrX, y: qrY } = convertCmToPdfCoords(1.81, 16.34, pageHeight);
+  const qrSize = 100; // in pts (100 pts ≈ 3.5cm)
+  page.drawImage(qrImage, {
+    x: qrX,
+    y: qrY,
+    width: qrSize,
+    height: qrSize,
+  });
+  console.log('[QR] QR code embedded in PDF at', qrX, qrY);
 
-  // Issued Date
-  doc.fontSize(16);
-  const dateWidth = doc.widthOfString(issuedDate);
-  doc.text(issuedDate, (doc.page.width - dateWidth) / 2, 340);
+  // 💾 Save final certificate PDF
+  const fileName = `CertGuard-${certId}.pdf`;
+  const outputPath = path.join(saveDir, fileName);
+  const pdfBytes = await pdfDoc.save();
+  fs.writeFileSync(outputPath, pdfBytes);
 
-  // End PDF generation
-  doc.end();
-
-  return { certId, fileName };
+  return { certId, fileName, hash, qrDataUrl, qrText };
 };
 
+async function processCertificate(localPdfPath, certId, userAddress) {
+  // 1. Upload to S3
+  const s3Key = `certificates/${certId}.pdf`;
+  const s3Result = await uploadFileToS3(localPdfPath, s3Key);
+
+  // 2. Hash the PDF
+  const fileBuffer = fs.readFileSync(localPdfPath);
+  const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+  // 3. Return S3 URL and hash (no blockchain)
+  return {
+    s3Url: s3Result.Location,
+    hash
+  };
+}
+
 export default generateCertificate;
+export { processCertificate };

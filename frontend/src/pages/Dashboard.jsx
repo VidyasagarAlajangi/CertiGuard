@@ -1,12 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useNavigate, Link } from 'react-router-dom';
-
-const mockCertificates = [
-  { id: 'CERT123', name: 'Blockchain Fundamentals', company: 'BlockTech Inc.', date: '2024-05-01', url: '/certificates/CERT123.pdf' },
-  { id: 'CERT456', name: 'React Advanced', company: 'WebDev Solutions', date: '2024-06-10', url: '/certificates/CERT456.pdf' },
-  { id: 'CERT789', name: 'Cybersecurity Basics', company: 'SecureIT', date: '2024-07-15', url: '/certificates/CERT789.pdf' },
-];
+import api from '../lib/axios';
 
 const Dashboard = () => {
   const { user } = useSelector((state) => state.auth);
@@ -21,22 +16,38 @@ const Dashboard = () => {
       navigate('/login');
       return;
     }
-    // Simulate API call
-    setTimeout(() => {
-      setCertificates(mockCertificates);
+    api.get('/certificates/user/certificates')
+      .then(res => {
+        setCertificates(res.data.certificates || []);
+        setLoading(false);
+      })
+      .catch(err => {
+        setError('Failed to load certificates');
       setLoading(false);
-    }, 800);
+        console.log(err);
+      });
   }, [user, navigate]);
+
+  const handleDownload = async (certId) => {
+    try {
+      const res = await api.get(`/certificates/download-url/${certId}`);
+      if (res.data && res.data.url) {
+        window.open(res.data.url, '_blank');
+      }
+    } catch (err) {
+      alert('Failed to get download link.');
+    }
+  };
 
   if (!user) return null;
 
   const filteredCertificates = certificates.filter(cert =>
-    cert.name.toLowerCase().includes(search.toLowerCase()) ||
-    cert.company.toLowerCase().includes(search.toLowerCase())
+    cert.courseName?.toLowerCase().includes(search.toLowerCase()) ||
+    cert.companyId?.name?.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[70vh]">
+    <div className="flex flex-col items-center justify-center min-h-[70vh] pt-30">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-2xl">
         <h2 className="text-3xl font-bold text-blue-700 mb-6 text-center">My Certificates</h2>
         <div className="mb-6 flex justify-center">
@@ -57,16 +68,20 @@ const Dashboard = () => {
         ) : (
           <ul className="space-y-4">
             {filteredCertificates.map((cert) => (
-              <li key={cert.id} className="border border-blue-100 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between bg-blue-50">
+              <li key={cert.certId} className="border border-blue-100 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between bg-blue-50">
                 <div>
-                  <div className="font-semibold text-blue-800 text-lg">{cert.name}</div>
-                  <div className="text-blue-500 text-sm">Company: {cert.company}</div>
-                  <div className="text-blue-500 text-sm">ID: {cert.id}</div>
-                  <div className="text-gray-500 text-xs">Issued: {cert.date}</div>
+                  <div className="font-semibold text-blue-800 text-lg">{cert.courseName}</div>
+                  <div className="text-blue-500 text-sm">Company: {cert.companyId?.name || 'N/A'}</div>
+                  <div className="text-blue-500 text-sm">ID: {cert.certId}</div>
+                  <div className="text-gray-500 text-xs">Issued: {cert.issuedDate ? new Date(cert.issuedDate).toLocaleDateString() : 'N/A'}</div>
                 </div>
                 <div className="mt-2 md:mt-0 flex gap-2">
-                  <Link to={`/certificate/${cert.id}`} className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition">View</Link>
-                  <a href={`/verify/${cert.id}`} className="px-4 py-2 bg-white border border-blue-600 text-blue-700 rounded-lg font-semibold hover:bg-blue-50 transition">Share/Verify</a>
+                 <button
+                    onClick={() => handleDownload(cert.certId)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition"
+                  >
+                    View & Download
+                  </button>
                 </div>
               </li>
             ))}

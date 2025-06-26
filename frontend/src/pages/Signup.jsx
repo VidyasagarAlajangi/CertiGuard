@@ -59,72 +59,72 @@ const Signup = () => {
             <a href="/login" className="underline text-blue-600 mt-4 inline-block">Go to Login</a>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-            >
-              <option value="user">Individual User</option>
-              <option value="company">Institute / Company</option>
-            </select>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+          >
+            <option value="user">Individual User</option>
+            <option value="company">Institute / Company</option>
+          </select>
 
-            <input
-              name="name"
-              type="text"
-              placeholder="Full Name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-            />
+          <input
+            name="name"
+            type="text"
+            placeholder="Full Name"
+            value={formData.name}
+            onChange={handleChange}
+            required
+            className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+          />
 
-            <input
-              name="email"
-              type="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={handleChange}
-              required
-              className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-            />
+          <input
+            name="email"
+            type="email"
+            placeholder="Email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+          />
 
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-            />
+          <input
+            name="password"
+            type="password"
+            placeholder="Password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+          />
 
-            {role === "company" && (
-              <>
-                <input
-                  name="phone"
-                  type="text"
-                  placeholder="Phone Number"
-                  value={formData.phone}
-                  onChange={handleChange}
-                  className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-                />
-                <input
-                  name="address"
-                  type="text"
-                  placeholder="Company Address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-                />
-                <input
-                  name="website"
-                  type="text"
-                  placeholder="Company Website"
-                  value={formData.website}
-                  onChange={handleChange}
-                  className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
-                />
+          {role === "company" && (
+            <>
+              <input
+                name="phone"
+                type="text"
+                placeholder="Phone Number"
+                value={formData.phone}
+                onChange={handleChange}
+                className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+              />
+              <input
+                name="address"
+                type="text"
+                placeholder="Company Address"
+                value={formData.address}
+                onChange={handleChange}
+                className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+              />
+              <input
+                name="website"
+                type="text"
+                placeholder="Company Website"
+                value={formData.website}
+                onChange={handleChange}
+                className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
+              />
                 <input
                   name="isoCertificateUrl"
                   type="text"
@@ -133,21 +133,21 @@ const Signup = () => {
                   onChange={handleChange}
                   className="border-2 border-blue-200 rounded-lg px-4 py-3 text-lg"
                 />
-              </>
-            )}
+            </>
+          )}
 
-            <button
-              type="submit"
-              className="bg-blue-600 text-white rounded-lg px-6 py-3 hover:bg-blue-700 font-semibold text-lg shadow transition"
-              disabled={loading}
-            >
-              {loading ? "Signing up..." : "Sign Up"}
-            </button>
+          <button
+            type="submit"
+            className="bg-blue-600 text-white rounded-lg px-6 py-3 hover:bg-blue-700 font-semibold text-lg shadow transition"
+            disabled={loading}
+          >
+            {loading ? "Signing up..." : "Sign Up"}
+          </button>
 
-            {error && (
-              <div className="text-red-600 text-center mt-2">{error}</div>
-            )}
-          </form>
+          {error && (
+            <div className="text-red-600 text-center mt-2">{error}</div>
+          )}
+        </form>
         )}
 
         <div className="text-center mt-4 text-blue-600">

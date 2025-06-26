@@ -34,6 +34,19 @@ const SignUp = async (req, res) => {
 
     await newUser.save();
 
+    // Link certificates with matching name/email and no userId to this user (case-insensitive, trimmed)
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedName = name.trim();
+    const updateResult = await Certificate.updateMany(
+      {
+        userId: null,
+        recipientEmail: { $regex: new RegExp(`^${normalizedEmail}$`, 'i') },
+        recipientName: normalizedName
+      },
+      { $set: { userId: newUser._id } }
+    );
+    console.log('Certificates linked to new user:', updateResult.modifiedCount);
+
     // If role is company, also create a Company record
     let companyInfo = null;
     if (role === "company") {
