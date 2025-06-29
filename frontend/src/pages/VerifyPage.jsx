@@ -4,20 +4,26 @@ import VerifyByQR from '../components/VerifyByQR';
 
 const VerifyPage = () => {
   return (
-    <div className="pb-24 pt-30 bg-gray-50 bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-6">
-        <h1 className="text-4xl font-bold text-center text-gray-800 mb-12">Certificate Verification</h1>
-        <div >
-          <div className="bg-white p-8 rounded-lg shadow-lg mb-10">
+    <div className="min-h-screen pb-20 pt-30 bg-gradient-to-br from-blue-50 via-indigo-100 to-purple-50">
+      <div className="max-w-4xl mx-auto px-6">
+        <h1 className="text-4xl font-extrabold text-center text-gray-800 mb-12 tracking-tight">
+          Certificate Verification
+        </h1>
+
+        <div className="space-y-10">
+          <section className="bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 transition hover:shadow-xl">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Verify by ID</h2>
             <VerifyById />
-          </div>
-          <div className="bg-white p-8 rounded-lg shadow-lg">
+          </section>
+
+          <section className="bg-white p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 transition hover:shadow-xl">
+            <h2 className="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">Verify by QR Image</h2>
             <VerifyByQR />
-          </div>
+          </section>
         </div>
       </div>
     </div>
   );
 };
 
-export default VerifyPage; 
+export default VerifyPage;

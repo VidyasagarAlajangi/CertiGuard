@@ -17,32 +17,31 @@ const VerifyById = () => {
     try {
       const res = await api.get(`/certificates/public/verify/${certId}`);
       if (res.data && res.data.valid) {
-      setResult(res.data);
+        setResult(res.data);
       } else {
         setError(res.data?.message || "Certificate not found or not valid.");
       }
     } catch (err) {
-      setError(
-        err.response?.data?.message || "An unknown error occurred. Please try again."
-      );
+      setError(err.response?.data?.message || "An unknown error occurred.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-8 h-full flex flex-col">
+    <div className="bg-white rounded-2xl shadow-xl p-8 h-full flex flex-col">
       <div className="flex items-center gap-3 mb-4">
-        <Search className="text-blue-500" size={24} />
-        <h2 className="text-2xl font-bold text-gray-800">Verify by ID</h2>
+        <Search className="text-blue-600" size={24} />
+        <h2 className="text-2xl font-bold text-gray-800">Verify by Certificate ID</h2>
       </div>
       <p className="text-gray-500 mb-6">
-        Enter the unique ID from the certificate to verify its authenticity.
+        Enter the unique certificate ID to check its validity.
       </p>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <input
           type="text"
-          className="border-2 border-gray-200 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-lg w-full"
+          className="border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-400 text-lg w-full"
           placeholder="Enter Certificate ID"
           value={certId}
           onChange={(e) => setCertId(e.target.value)}
@@ -84,7 +83,6 @@ const VerifyById = () => {
             <div><span className="font-semibold">Issued Date:</span> {result.cert.issuedDate ? new Date(result.cert.issuedDate).toLocaleDateString() : 'N/A'}</div>
             <div><span className="font-semibold">Company:</span> {result.cert.companyName}</div>
             <div className="col-span-2"><span className="font-semibold">Certificate ID:</span> {result.cert.certId}</div>
-           
           </div>
         </div>
       )}
@@ -92,4 +90,4 @@ const VerifyById = () => {
   );
 };
 
-export default VerifyById; 
+export default VerifyById;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "../lib/axios";
 import { Building2 } from "lucide-react";
 
 export default function ViewCompanies() {
@@ -8,10 +8,7 @@ export default function ViewCompanies() {
   const [actionLoading, setActionLoading] = useState("");
 
   const fetchCompanies = async () => {
-    const token = localStorage.getItem("token");
-    const res = await axios.get("/api/admin/companies", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await api.get("/admin/companies");
     setCompanies(res.data.companies);
   };
 
@@ -22,12 +19,7 @@ export default function ViewCompanies() {
   const handleAction = async (id, status) => {
     setActionLoading(id + status);
     try {
-      const token = localStorage.getItem("token");
-      await axios.patch(
-        `/api/companies/${id}`,
-        { status },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.patch(`/companies/${id}`, { status });
       await fetchCompanies();
     } catch (err) {
       alert("Action failed: " + (err.response?.data?.message || err.message));

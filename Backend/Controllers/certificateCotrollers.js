@@ -8,48 +8,12 @@ import axios from 'axios';
 import crypto from 'crypto';
 import s3 from '../lib/s3.js';
 import jsQR from 'jsqr';
+import { createCanvas, loadImage } from 'canvas';
+import sharp from 'sharp';
 
-const verifyCertificate = async (req, res) => {
-  try {
-    const { certId } = req.params;
-    console.log(certId);
-    // Find certificate by certId and populate company name
-    const cert = await Certificate.findOne({ certId }).populate("companyId", "name");
-    if (!cert) return res.status(404).json({ valid: false, message: 'Certificate not found' });
 
-    // Generate a pre-signed S3 URL for the file
-    const urlParts = cert.s3Url.split('/');
-    const key = urlParts.slice(3).join('/');
-    const signedUrl = s3.getSignedUrl('getObject', {
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: key,
-      Expires: 60
-    });
 
-    // Download PDF from S3 using the signed URL
-    const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
-    const hash = crypto.createHash('sha256').update(response.data).digest('hex');
 
-    // Compare with hash stored in MongoDB
-    const isValid = hash === cert.hash;
-
-    res.json({
-      valid: isValid,
-      cert: {
-        certId: cert.certId,
-        recipientName: cert.recipientName,
-        courseName: cert.courseName,
-        issuedDate: cert.issuedDate,
-        companyName: cert.companyId?.name || "N/A",
-        s3Url: cert.s3Url,
-        hash: cert.hash,
-      },
-      message: isValid ? "Certificate is valid." : "Certificate is invalid or has been tampered with."
-    });
-  } catch (error) {
-    res.status(500).json({ valid: false, message: "Verification failed", error: error.message });
-  }
-};
 
 const downloadSingleCertificate = async (req, res) => {
   try {
@@ -157,29 +121,6 @@ const certificateIssuanceDraft = async (req, res) => {
       message: "Error creating draft.",
       error: error.message,
     });
-  }
-};
-
-const approveCertificateIssuance = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const updated = await IssuanceQueue.findByIdAndUpdate(
-      id,
-      { status: "approved", approvedAt: new Date() },
-      { new: true }
-    );
-
-    if (!updated)
-      return res
-        .status(404)
-        .json({ success: false, message: "Request not found" });
-
-    res.status(200).json({ success: true, message: "Approved", data: updated });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ success: false, message: "Approval failed", error: err.message });
   }
 };
 
@@ -352,106 +293,179 @@ export const getCertificateDownloadUrl = async (req, res) => {
   }
 };
 
-export const verifyCertificateByQR = async (req, res) => {
+const verifyCertificate = async (req, res) => {
   try {
-    const qrData = req.query.data;
-    console.log('[QR VERIFY] Incoming data:', qrData);
-    if (!qrData) {
-      return res.status(400).json({ success: false, message: 'QR data is required.' });
-    }
-    // Extract certId from URL or direct value
-    let certId = qrData;
-    const match = qrData.match(/(?:\/verify\/|certId=)([\w-]+)/);
-    if (match && match[1]) {
-      certId = match[1];
-    }
-    console.log('[QR VERIFY] Parsed certId:', certId);
-    if (!certId) {
-      return res.status(400).json({ success: false, message: 'Invalid QR code format.' });
-    }
-    // Find certificate by certId
-    const certificate = await Certificate.findOne({ certId })
-      .populate('companyId', 'name')
-      .populate('userId', 'name email');
-    if (!certificate) {
-      return res.status(404).json({ success: false, message: 'Certificate not found.' });
-    }
-    if (certificate.status !== 'approved') {
-      return res.status(400).json({ success: false, message: 'Certificate is not approved.' });
-    }
-    res.status(200).json({
-      success: true,
-      message: 'Certificate verified successfully.',
-      certificate,
+    const { certId } = req.params;
+    console.log(certId);
+    // Find certificate by certId and populate company name
+    const cert = await Certificate.findOne({ certId }).populate("companyId", "name");
+    if (!cert) return res.status(404).json({ valid: false, message: 'Certificate not found' });
+
+    // Generate a pre-signed S3 URL for the file
+    const urlParts = cert.s3Url.split('/');
+    const key = urlParts.slice(3).join('/');
+    const signedUrl = s3.getSignedUrl('getObject', {
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: key,
+      Expires: 60
+    });
+
+    // Download PDF from S3 using the signed URL
+    const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+    const hash = crypto.createHash('sha256').update(response.data).digest('hex');
+
+    // Compare with hash stored in MongoDB
+    const isValid = hash === cert.hash;
+
+    res.json({
+      valid: isValid,
+      cert: {
+        certId: cert.certId,
+        recipientName: cert.recipientName,
+        courseName: cert.courseName,
+        issuedDate: cert.issuedDate,
+        companyName: cert.companyId?.name || "N/A",
+        s3Url: cert.s3Url,
+        hash: cert.hash,
+      },
+      message: isValid ? "Certificate is valid." : "Certificate is invalid or has been tampered with."
     });
   } catch (error) {
-    console.error('[QR VERIFY] Error:', error);
-    res.status(500).json({ success: false, message: 'Internal server error.', error: error.message });
+    res.status(500).json({ valid: false, message: "Verification failed", error: error.message });
   }
 };
 
 export const scanQRFromImage = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No image file uploaded."
-      });
+    if (!req.file || !req.file.mimetype.startsWith('image/')) {
+      return res.status(400).json({ success: false, message: "Invalid or missing image file." });
     }
-    if (!req.file.mimetype.startsWith('image/')) {
-      return res.status(400).json({
-        success: false,
-        message: "Please upload an image file (JPEG, PNG, etc.)."
-      });
-    }
-    try {
-      const JimpModule = await import('jimp');
-      const Jimp = JimpModule.default;
-      const image = await Jimp.read(req.file.path);
-      console.log('[QR SCAN] Image loaded:', req.file.originalname, image.bitmap.width, image.bitmap.height, req.file.mimetype);
-      if (image.bitmap.width < 300 || image.bitmap.height < 300) {
-        image.resize(300, 300);
-        console.log('[QR SCAN] Image resized to 300x300 for QR detection');
+
+    const filePath = req.file.path.replace(/\\/g, '/');
+    console.log('[ScanQR] Processing image with sharp/canvas:', filePath);
+
+    let code = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    // Try different image processing approaches
+    while (!code && attempts < maxAttempts) {
+      attempts++;
+      console.log(`[ScanQR] Attempt ${attempts}/${maxAttempts}`);
+
+      try {
+        let processedImagePath;
+        
+        if (attempts === 1) {
+          // First attempt: Resize to 300x300 (good for standalone QR codes)
+          processedImagePath = filePath.replace(/\.(png|jpg|jpeg)$/, '-resized.png');
+          await sharp(filePath)
+            .resize({ width: 300, height: 300, fit: 'inside' })
+            .toFile(processedImagePath);
+        } else if (attempts === 2) {
+          // Second attempt: Resize to 800x800 (better for certificate images)
+          processedImagePath = filePath.replace(/\.(png|jpg|jpeg)$/, '-large.png');
+          await sharp(filePath)
+            .resize({ width: 800, height: 800, fit: 'inside' })
+            .toFile(processedImagePath);
+        } else {
+          // Third attempt: Enhance contrast and brightness for difficult images
+          processedImagePath = filePath.replace(/\.(png|jpg|jpeg)$/, '-enhanced.png');
+          await sharp(filePath)
+            .resize({ width: 600, height: 600, fit: 'inside' })
+            .modulate({ brightness: 1.2, contrast: 1.3 })
+            .sharpen()
+            .toFile(processedImagePath);
+        }
+
+        const img = await loadImage(processedImagePath);
+        const canvas = createCanvas(img.width, img.height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
+        code = jsQR(imageData.data, imageData.width, imageData.height);
+
+        // Cleanup processed image
+        fs.unlink(processedImagePath, () => {});
+
+        if (code) {
+          console.log(`[ScanQR] ✅ QR code found on attempt ${attempts}`);
+          break;
+        }
+      } catch (attemptError) {
+        console.log(`[ScanQR] Attempt ${attempts} failed:`, attemptError.message);
+        // Continue to next attempt
       }
-      image.grayscale();
-      const imageData = {
-        data: new Uint8ClampedArray(image.bitmap.data),
-        width: image.bitmap.width,
-        height: image.bitmap.height
-      };
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.error('[QR SCAN] Error deleting uploaded file:', err);
-      });
-      if (code) {
-        return res.json({
-          success: true,
-          qrData: code.data
-        });
-      } else {
-        console.log('[QR SCAN] jsQR could not find a QR code in the image.');
-        return res.status(404).json({
-          success: false,
-          message: "No QR code found in the image. Please try another image."
-        });
-      }
-    } catch (imageError) {
-      fs.unlink(req.file.path, (err) => {
-        if (err) console.error('[QR SCAN] Error deleting uploaded file:', err);
-      });
-      console.error('[QR SCAN] Jimp or jsQR error:', imageError);
-      return res.status(400).json({
-        success: false,
-        message: "Failed to process the image. Please ensure it's a valid image file.",
-        error: imageError.message
+    }
+
+    // Cleanup original file
+    fs.unlink(filePath, () => {});
+
+    if (!code) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'No QR code found in the image. Please ensure the image contains a clear, readable QR code.',
+        suggestions: [
+          'Make sure the QR code is clearly visible in the image',
+          'Try taking a photo in better lighting',
+          'Ensure the QR code is not blurry or distorted',
+          'For certificate images, make sure the QR code area is well-lit'
+        ]
       });
     }
-  } catch (error) {
-    console.error("[QR SCAN] QR scanning error:", error);
+
+    console.log('[ScanQR] QR data extracted:', code.data);
+    return res.json({ success: true, qrData: code.data });
+
+  } catch (err) {
+    console.error('[ScanQR] QR processing failed:', err);
+    fs.unlink(req.file?.path || '', () => {});
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process image. Please try again with a different image.",
+      error: err.message,
+    });
+  }
+};
+
+// Function: Verify Certificate using QR Data
+export const verifyCertificateByQR = async (req, res) => {
+  try {
+    const { data } = req.query;
+
+    if (!data) {
+      console.warn('[VERIFY QR] ❌ Missing "data" query param');
+      return res.status(400).json({ success: false, message: "Missing QR data." });
+    }
+
+    const certId = data.split('/').pop();
+    console.info('[VERIFY QR] 🔍 Extracted certId from QR data:', certId);
+
+    const cert = await Certificate.findOne({ certId })
+      .populate('companyId', 'name')
+      .populate('userId', 'name email');
+
+    if (!cert) {
+      console.warn(`[VERIFY QR] ❌ Certificate not found for certId: ${certId}`);
+      return res.status(404).json({ success: false, message: "Certificate not found." });
+    }
+
+    console.log('[VERIFY QR] ✅ Certificate verified:', {
+      courseName: cert.courseName,
+      certId: cert.certId,
+      user: cert.userId?.email,
+      company: cert.companyId?.name,
+    });
+
+    res.json({ success: true, certificate: cert });
+
+  } catch (err) {
+    console.error('[VERIFY QR] 🔥 Verification failed:', err.message);
     res.status(500).json({
       success: false,
-      message: "Failed to scan QR code from image.",
-      error: error.message
+      message: "Verification failed.",
+      error: err.message,
     });
   }
 };
@@ -461,7 +475,6 @@ export {
   downloadSingleCertificate,
   downloadBulkCertificates,
   certificateIssuanceDraft,
-  approveCertificateIssuance,
   rejectCertificateIssuance,
   getUserCertificates,
   getAllCertificates,

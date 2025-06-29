@@ -1,93 +1,183 @@
 import { useState, useRef } from 'react';
 import api from '../lib/axios';
+import { CheckCircle, XCircle, Image as ImageIcon, UploadCloud, FileText, QrCode } from 'lucide-react';
 
-const VerifyByQR = () => {
+const VerifyQr = () => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [image, setImage] = useState(null);
-  const fileInputRef = useRef();
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileRef = useRef();
 
   const handleImageChange = (e) => {
-    setImage(e.target.files[0]);
-    setResult(null);
-    setError(null);
+    const file = e.target.files[0];
+    if (file) {
+      setImage(file);
+      setResult(null);
+      setError(null);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => setImagePreview(e.target.result);
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleScan = async (e) => {
     e.preventDefault();
-    if (!image) {
-      setError('Please select an image file containing a QR code.');
-      return;
-    }
-    setScanning(true);
-    setError(null);
-    setResult(null);
+    if (!image) return setError("Please select an image.");
+
     try {
-      console.log('[VerifyByQR] Uploading image to scan QR...');
+      setScanning(true);
       const formData = new FormData();
-      formData.append('qrImage', image);
-      console.log('[VerifyByQR] Uploading image to scan QR...');
-      const scanRes = await api.post('/certificates/scan-qr', formData, {
+      formData.append("qrImage", image);
+
+      const { data: scanData } = await api.post('/certificates/scan-qr', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      console.log('[VerifyByQR] Scan response:', scanRes.data);
-      if (scanRes.data && scanRes.data.qrData) {
-        // Now verify the certificate using the decoded QR data
-        setLoading(true);
-        const verifyRes = await api.get(`/certificates/verify/qr?data=${encodeURIComponent(scanRes.data.qrData)}`);
-        console.log('[VerifyByQR] Verification response:', verifyRes.data);
-        setResult(verifyRes.data);
-      } else {
-        setError(scanRes.data?.message || 'No QR code found in the image.');
-      }
+
+      if (!scanData.success) throw new Error(scanData.message);
+      
+      // Extract certificate ID from the QR URL
+      const certId = scanData.qrData.split('/').pop();
+
+      if (!certId) throw new Error("Invalid QR code format.");
+
+      setLoading(true);
+      const { data: verifyData } = await api.get(`/certificates/public/verify/${certId}`);
+      setResult(verifyData);
     } catch (err) {
-      console.error('[VerifyByQR] Error:', err);
-      setError(err.response?.data?.message || 'QR scan or verification failed.');
+      setError(err.response?.data?.message || err.message);
     } finally {
       setScanning(false);
       setLoading(false);
     }
   };
 
+  const clearImage = () => {
+    setImage(null);
+    setImagePreview(null);
+    setResult(null);
+    setError(null);
+    if (fileRef.current) {
+      fileRef.current.value = '';
+    }
+  };
+
   return (
-    <div className="max-w-md mx-auto bg-white rounded-xl shadow-md p-8 mt-8">
-      <h2 className="text-2xl font-bold mb-4 text-blue-700">Verify Certificate by QR Image</h2>
+    <div className="bg-white rounded-2xl shadow-xl p-8 h-full flex flex-col">
+      <div className="flex items-center gap-3 mb-4">
+        <ImageIcon className="text-blue-600" />
+        <h2 className="text-2xl font-bold text-gray-800">Verify by QR Image</h2>
+      </div>
+      
+      <div className="mb-6">
+        <p className="text-gray-600 mb-3">
+          Upload an image containing a QR code to verify certificate authenticity.
+        </p>
+        <div className="bg-blue-50 p-4 rounded-lg">
+          <div className="flex items-start gap-3">
+            <QrCode className="text-blue-600 mt-1 flex-shrink-0" size={20} />
+            <div className="text-sm text-blue-800">
+              <p className="font-semibold mb-1">Supported formats:</p>
+              <ul className="space-y-1">
+                <li>• <strong>QR Code images</strong> - Standalone QR codes</li>
+                <li>• <strong>Certificate images</strong> - Certificates with embedded QR codes</li>
+                <li>• <strong>File types:</strong> JPG, PNG, JPEG</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <form onSubmit={handleScan} className="flex flex-col gap-4">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={handleImageChange}
-          ref={fileInputRef}
-          className="border border-gray-300 rounded-lg px-2 py-1"
-        />
+        <div className="space-y-3">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleImageChange}
+            ref={fileRef}
+            className="block w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          
+          {imagePreview && (
+            <div className="relative">
+              <img 
+                src={imagePreview} 
+                alt="Preview" 
+                className="max-w-full h-48 object-contain border rounded-lg"
+              />
+              <button
+                type="button"
+                onClick={clearImage}
+                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
+          )}
+        </div>
+
         <button
           type="submit"
-          className="bg-blue-600 text-white rounded-lg px-4 py-2 font-semibold hover:bg-blue-700 transition"
           disabled={scanning || loading || !image}
+          className="bg-blue-600 text-white rounded-lg px-6 py-3 hover:bg-blue-700 font-semibold text-lg shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
         >
-          {scanning || loading ? 'Verifying...' : 'Verify by QR Image'}
+          {scanning || loading ? (
+            <>
+              <UploadCloud className="animate-spin" size={20} /> 
+              {scanning ? 'Scanning QR Code...' : 'Verifying Certificate...'}
+            </>
+          ) : (
+            <>
+              <FileText size={20} />
+              Verify Certificate
+            </>
+          )}
         </button>
       </form>
-      {error && <div className="mt-4 text-red-600">{error}</div>}
-      {result && result.success && (
-        <div className="mt-6 p-4 bg-green-50 rounded-lg">
-          <h3 className="font-bold text-green-700 mb-2">Certificate Verified!</h3>
-          <div className="text-gray-800">
-            <div><b>Course:</b> {result.certificate.courseName}</div>
-            <div><b>Issued By:</b> {result.certificate.companyId?.name}</div>
-            <div><b>Issued To:</b> {result.certificate.userId?.name} ({result.certificate.userId?.email})</div>
-            <div><b>Issued On:</b> {new Date(result.certificate.issuedDate).toLocaleDateString()}</div>
-            <div><b>Certificate ID:</b> {result.certificate.certId}</div>
+
+      {error && (
+        <div className="mt-6 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-3">
+          <XCircle />
+          <div className="flex-1">
+            <span className="font-medium">{error}</span>
+            {error.includes('No QR code found') && (
+              <div className="mt-3">
+                <p className="text-sm font-medium mb-2">Suggestions to improve QR code detection:</p>
+                <ul className="text-sm space-y-1">
+                  <li>• Make sure the QR code is clearly visible in the image</li>
+                  <li>• Try taking a photo in better lighting</li>
+                  <li>• Ensure the QR code is not blurry or distorted</li>
+                  <li>• For certificate images, make sure the QR code area is well-lit</li>
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
-      {result && !result.success && (
-        <div className="mt-4 text-red-600">{result.message}</div>
+
+      {result && (
+        <div className={`mt-6 p-4 rounded-lg flex flex-col gap-2 ${result.valid ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            {result.valid ? <CheckCircle /> : <XCircle />}
+            <span className="font-bold text-lg">
+              {result.valid ? 'Certificate is valid.' : 'Certificate is invalid or has been tampered with.'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div><span className="font-semibold">Recipient:</span> {result.cert.recipientName}</div>
+            <div><span className="font-semibold">Course:</span> {result.cert.courseName}</div>
+            <div><span className="font-semibold">Issued Date:</span> {result.cert.issuedDate ? new Date(result.cert.issuedDate).toLocaleDateString() : 'N/A'}</div>
+            <div><span className="font-semibold">Company:</span> {result.cert.companyName}</div>
+            <div className="col-span-2"><span className="font-semibold">Certificate ID:</span> {result.cert.certId}</div>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
-export default VerifyByQR; 
+export default VerifyQr;
