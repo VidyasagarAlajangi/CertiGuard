@@ -32,7 +32,23 @@ const Dashboard = () => {
     try {
       const res = await api.get(`/certificates/download-url/${certId}`);
       if (res.data && res.data.url) {
-        window.open(res.data.url, '_blank');
+        const backendUrl = "http://localhost:4000";
+        const fileUrl = res.data.url.startsWith("http")
+          ? res.data.url
+          : backendUrl + res.data.url;
+
+        // Fetch the file as a blob
+        const response = await fetch(fileUrl);
+        const blob = await response.blob();
+
+        // Create a temporary <a> element to trigger download
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = fileUrl.split('/').pop(); // Use the filename from the URL
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(link.href);
       }
     } catch (err) {
       alert('Failed to get download link.');

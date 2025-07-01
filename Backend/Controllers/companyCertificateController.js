@@ -6,6 +6,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import generateCertificate from "../utils/generateCertificate.js";
 import { processCertificate } from "../utils/generateCertificate.js";
+import { sendMail } from '../utils/sendMail.js';
 
 // Issue a single certificate
 export const issueSingleCertificate = async (req, res) => {
@@ -24,7 +25,7 @@ export const issueSingleCertificate = async (req, res) => {
     let userId = recipient ? recipient._id : null;
 
     const certId = uuidv4();
-    const templatePath = "templates/Template_4.pdf";
+    const templatePath = "templates/CertGuard.pdf";
     const saveDir = "certificates/";
 
     // Fetch company name for template
@@ -43,7 +44,8 @@ export const issueSingleCertificate = async (req, res) => {
     );
 
     const localPdfPath = path.join(saveDir, fileName);
-    const { s3Url, hash } = await processCertificate(localPdfPath, certId, userId);
+    const { pdfUrl, hash, txHash, contractAddress } = await processCertificate(localPdfPath, certId);
+    console.log('[Controller] processCertificate result:', { pdfUrl, hash, txHash, contractAddress });
 
     // Create certificate record
     const certificate = new Certificate({
@@ -52,17 +54,38 @@ export const issueSingleCertificate = async (req, res) => {
       recipientEmail,
       userId, // <-- only set if user exists
       companyId: req.user.id,
+      companyName,
       courseName,
       courseDuration: courseDuration || "",
       remarks: remarks || "Successfully Completed",
       issuedDate: new Date(),
       status: "approved",
-      s3Url,
+      pdfUrl,
       hash,
       qrCodeUrl: qrText,
+      txHash,
+      contractAddress
     });
 
     await certificate.save();
+
+    // Send email to recipient
+    try {
+      await sendMail({
+        to: recipientEmail,
+        subject: `Your Certificate from ${companyName}`,
+        text: `Dear ${recipientName},\n\nCongratulations! Your certificate for ${courseName} has been issued.\n\nYou can find your certificate attached.`,
+        attachments: [
+          {
+            filename: fileName,
+            path: localPdfPath,
+            contentType: 'application/pdf',
+          },
+        ],
+      });
+    } catch (mailErr) {
+      console.error('Failed to send certificate email:', mailErr);
+    }
 
     res.status(201).json({
       success: true,
@@ -104,7 +127,7 @@ export const issueBulkCertificates = async (req, res) => {
     }
 
     const recipients = [];
-    const templatePath = "templates/Template_4.pdf";
+    const templatePath = "templates/CertGuard.pdf";
     const saveDir = "certificates/";
     const certificates = [];
 
@@ -143,7 +166,8 @@ export const issueBulkCertificates = async (req, res) => {
           saveDir
         );
         const localPdfPath = path.join(saveDir, fileName);
-        const { s3Url, hash } = await processCertificate(localPdfPath, certId, userId);
+        const { pdfUrl, hash, txHash, contractAddress } = await processCertificate(localPdfPath, certId);
+        console.log('[Controller] processCertificate result:', { pdfUrl, hash, txHash, contractAddress });
 
         // Create certificate record
         const certificate = new Certificate({
@@ -152,17 +176,39 @@ export const issueBulkCertificates = async (req, res) => {
           recipientEmail: recipient.email,
           userId, // <-- only set if user exists
           companyId: req.user.id,
+          companyName,
           courseName,
           courseDuration: courseDuration || "",
           remarks: remarks || "Successfully Completed",
           issuedDate: new Date(),
           status: "approved",
-          s3Url,
+          pdfUrl,
           hash,
           qrCodeUrl: qrText,
+          txHash,
+          contractAddress
         });
 
         await certificate.save();
+
+        // Send email to recipient
+        try {
+          await sendMail({
+            to: recipient.email,
+            subject: `Your Certificate from ${companyName}`,
+            text: `Dear ${recipient.name},\n\nCongratulations! Your certificate for ${courseName} has been issued.\n\nYou can find your certificate attached.`,
+            attachments: [
+              {
+                filename: fileName,
+                path: localPdfPath,
+                contentType: 'application/pdf',
+              },
+            ],
+          });
+        } catch (mailErr) {
+          console.error(`Failed to send certificate email to ${recipient.email}:`, mailErr);
+        }
+
         certificates.push(certificate);
       } catch (err) {
         console.error(`Error processing recipient ${recipient.email}:`, err);

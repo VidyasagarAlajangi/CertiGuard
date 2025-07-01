@@ -6,10 +6,10 @@ import IssuanceQueue from "../Models/issuanceQueueModel.js";
 import archiver from "archiver";
 import axios from 'axios';
 import crypto from 'crypto';
-import s3 from '../lib/s3.js';
 import jsQR from 'jsqr';
 import { createCanvas, loadImage } from 'canvas';
 import sharp from 'sharp';
+import { verifyCertificateHash } from '../lib/blockchain.js';
 
 
 
@@ -270,18 +270,17 @@ export const getCertificateDownloadUrl = async (req, res) => {
       });
     }
 
-    // Generate a pre-signed S3 URL for the file
-    const urlParts = cert.s3Url.split('/');
-    const key = urlParts.slice(3).join('/');
-    const signedUrl = s3.getSignedUrl('getObject', {
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: key,
-      Expires: 3600 // 1 hour
-    });
+    if (!cert.pdfUrl) {
+      return res.status(404).json({
+        success: false,
+        message: "Certificate file not found."
+      });
+    }
 
+    // Return the local file URL
     res.json({ 
       success: true, 
-      url: signedUrl 
+      url: cert.pdfUrl 
     });
   } catch (error) {
     console.error("Download URL error:", error);
@@ -296,41 +295,64 @@ export const getCertificateDownloadUrl = async (req, res) => {
 const verifyCertificate = async (req, res) => {
   try {
     const { certId } = req.params;
-    console.log(certId);
-    // Find certificate by certId and populate company name
+    console.log('[VERIFY] certId:', certId);
     const cert = await Certificate.findOne({ certId }).populate("companyId", "name");
-    if (!cert) return res.status(404).json({ valid: false, message: 'Certificate not found' });
+    if (!cert) {
+      console.log('[VERIFY] Certificate not found in DB');
+      return res.status(404).json({ valid: false, message: 'Certificate not found' });
+    }
 
-    // Generate a pre-signed S3 URL for the file
-    const urlParts = cert.s3Url.split('/');
-    const key = urlParts.slice(3).join('/');
-    const signedUrl = s3.getSignedUrl('getObject', {
-      Bucket: process.env.AWS_S3_BUCKET,
-      Key: key,
-      Expires: 60
-    });
-
-    // Download PDF from S3 using the signed URL
-    const response = await axios.get(signedUrl, { responseType: 'arraybuffer' });
-    const hash = crypto.createHash('sha256').update(response.data).digest('hex');
+    // Read PDF from local filesystem
+    const filePath = cert.pdfUrl.startsWith('/') ? cert.pdfUrl.slice(1) : cert.pdfUrl;
+    console.log('[VERIFY] filePath:', filePath);
+    if (!fs.existsSync(filePath)) {
+      console.log('[VERIFY] Certificate file not found at path:', filePath);
+      return res.status(404).json({ valid: false, message: 'Certificate file not found' });
+    }
+    const fileBuffer = fs.readFileSync(filePath);
+    const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+    console.log('[VERIFY] Calculated file hash:', hash);
+    console.log('[VERIFY] DB hash:', cert.hash);
 
     // Compare with hash stored in MongoDB
-    const isValid = hash === cert.hash;
+    const isValidDB = hash === cert.hash;
+    console.log('[VERIFY] isValidDB:', isValidDB);
+
+    // Blockchain verification (if txHash and contractAddress are present)
+    let blockchain = { valid: null, txHash: cert.txHash, contractAddress: cert.contractAddress };
+    if (cert.txHash && cert.contractAddress) {
+      try {
+        console.log('[VERIFY] Performing blockchain verification...');
+        blockchain.valid = await verifyCertificateHash(hash);
+        console.log('[VERIFY] Blockchain valid:', blockchain.valid);
+      } catch (err) {
+        console.error('[VERIFY] Blockchain verification failed:', err);
+        blockchain.valid = false;
+      }
+    } else {
+      console.log('[VERIFY] Skipping blockchain verification (no txHash/contractAddress)');
+    }
 
     res.json({
-      valid: isValid,
+      valid: isValidDB && (blockchain.valid !== null ? blockchain.valid : true),
       cert: {
         certId: cert.certId,
         recipientName: cert.recipientName,
         courseName: cert.courseName,
         issuedDate: cert.issuedDate,
         companyName: cert.companyId?.name || "N/A",
-        s3Url: cert.s3Url,
+        pdfUrl: cert.pdfUrl,
         hash: cert.hash,
+        txHash: cert.txHash,
+        contractAddress: cert.contractAddress,
       },
-      message: isValid ? "Certificate is valid." : "Certificate is invalid or has been tampered with."
+      dbVerification: isValidDB,
+      blockchainVerification: blockchain,
+      message: isValidDB && (blockchain.valid !== null ? blockchain.valid : true)
+        ? "Certificate is valid." : "Certificate is invalid or has been tampered with."
     });
   } catch (error) {
+    console.error('[VERIFY] Verification failed:', error);
     res.status(500).json({ valid: false, message: "Verification failed", error: error.message });
   }
 };

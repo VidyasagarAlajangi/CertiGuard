@@ -8,7 +8,11 @@ import userRouter from "./Routes/userRoutes.js";
 import certRouter from "./Routes/certificateRoutes.js";
 import companyRouter from "./Routes/companyRoutes.js";
 import companyCertRouter from "./Routes/companyCertificateRoutes.js";
-
+import fs from "fs";
+// Ensure the certificates directory exists (for Render and other hosts)
+if (!fs.existsSync("certificates")) {
+  fs.mkdirSync("certificates");
+}
 const app = express();
 
 // ✅ Check for JWT_SECRET

@@ -28,6 +28,11 @@ const CertificateSchema = new mongoose.Schema(
       ref: "Company",
     },
 
+    companyName: {
+      type: String,
+      default: "",
+    },
+
     courseName: {
       type: String,
       required: true,
@@ -64,8 +69,11 @@ const CertificateSchema = new mongoose.Schema(
       default: "",
     },
 
-    s3Url: String,
     hash: String,
+    // Blockchain integration fields
+    txHash: { type: String, default: "" },
+    contractAddress: { type: String, default: "" },
+    tokenId: { type: String, default: "" },
   },
   { timestamps: true }
 );
