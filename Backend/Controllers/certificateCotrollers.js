@@ -3,8 +3,6 @@ import path from "path";
 import fs from "fs";
 import Certificate from "../Models/certificateModel.js";
 import IssuanceQueue from "../Models/issuanceQueueModel.js";
-import archiver from "archiver";
-import axios from 'axios';
 import crypto from 'crypto';
 import jsQR from 'jsqr';
 import { createCanvas, loadImage } from 'canvas';
