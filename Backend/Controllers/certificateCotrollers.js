@@ -47,44 +47,7 @@ const downloadSingleCertificate = async (req, res) => {
   }
 };
 
-const downloadBulkCertificates = async (req, res) => {
-  try {
-    const { certIds } = req.body; // array of certId
-    if (!Array.isArray(certIds) || certIds.length === 0) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Certificate IDs required." });
-    }
 
-    res.setHeader(
-      "Content-Disposition",
-      "attachment; filename=certificates.zip"
-    );
-    res.setHeader("Content-Type", "application/zip");
-
-    const archive = archiver("zip", { zlib: { level: 9 } });
-    archive.pipe(res);
-
-    for (const certId of certIds) {
-      const cert = await Certificate.findOne({ certId });
-      if (cert && cert.pdfUrl) {
-        const filePath = path.resolve(`.${cert.pdfUrl}`);
-        if (fs.existsSync(filePath)) {
-          archive.file(filePath, { name: `certificate-${certId}.pdf` });
-    }
-      }
-    }
-
-    await archive.finalize();
-  } catch (error) {
-    console.error("ZIP download error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Bulk download failed",
-      error: error.message,
-    });
-  }
-};
 
 const certificateIssuanceDraft = async (req, res) => {
   try {
