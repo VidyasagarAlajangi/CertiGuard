@@ -456,7 +456,6 @@ export const verifyCertificateByQR = async (req, res) => {
 export {
   verifyCertificate,
   downloadSingleCertificate,
-  downloadBulkCertificates,
   certificateIssuanceDraft,
   rejectCertificateIssuance,
   getUserCertificates,
